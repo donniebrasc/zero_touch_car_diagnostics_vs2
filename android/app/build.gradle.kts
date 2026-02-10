@@ -30,21 +30,28 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "com.example.zero_touch_car_diagnostics"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
-        versionCode = flutter.versionCode
-        versionName = flutter.versionName
+        // Explicitly set versionCode/versionName for this release
+        versionCode = 4
+        versionName = "ZTCD_v1.32.11.beta"
+    }
+
+    signingConfigs {
+        create("release") {
+            // Keystore file will be provided by CI by decoding KEYSTORE_BASE64
+            storeFile = file("${project.projectDir}/release.keystore")
+            storePassword = System.getenv("KEYSTORE_PASSWORD") ?: "changeit"
+            keyAlias = System.getenv("KEY_ALIAS") ?: "key"
+            keyPassword = System.getenv("KEY_PASSWORD") ?: "changeit"
+        }
     }
 
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 
