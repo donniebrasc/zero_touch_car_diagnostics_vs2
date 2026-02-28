@@ -6,6 +6,10 @@ on:
       - 'v*'
   workflow_dispatch:
 
+env:
+  BUILD_NAME: "1.32.11"
+  BUILD_NUMBER: "33"
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -15,7 +19,7 @@ jobs:
         uses: actions/checkout@v4
         
       - name: Set up Java
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
@@ -29,62 +33,25 @@ jobs:
       - name: Get dependencies
         run: flutter pub get
 
-      - name: Show environment
-        run: |
-          echo "--- Environment ---"
-          env
-          echo "--- Java ---"
-          java -version || true
-          echo "--- Flutter ---"
-          flutter --version || true
-          echo "--- sdkmanager (if available) ---"
-          which sdkmanager || true
-
-      - name: Install Android SDK packages (if sdkmanager present)
-        shell: bash
-        run: |
-          set -e
-          if command -v sdkmanager >/dev/null 2>&1; then
-            echo "Installing Android SDK packages"
-            yes | sdkmanager "platform-tools" "platforms;android-33" "build-tools;33.0.0" "cmdline-tools;latest" || true
-            yes | sdkmanager --licenses || true
-          else
-            echo "sdkmanager not found; assuming runner already has Android SDK"
-          fi
-
       - name: Flutter doctor
+        # Run as informational step; failures do not block the build
         run: flutter doctor -v || true
 
-      - name: Build APK (verbose)
-        continue-on-error: true
+      - name: Build Release APK
         run: |
-          set -o pipefail
-          mkdir -p build_logs
-          flutter build apk --release --build-name=1.32.11 --build-number=33 --verbose 2>&1 | tee build_logs/flutter_build.log
+          flutter build apk --release --build-name=${{ env.BUILD_NAME }} --build-number=${{ env.BUILD_NUMBER }}
 
-      - name: Prepare release APK and logs
-        if: always()
+      - name: Prepare release APK
         run: |
           mkdir -p release
-          if [ -f build/app/outputs/flutter-apk/app-release.apk ]; then
-            cp build/app/outputs/flutter-apk/app-release.apk release/ZTCDv1.32.11.apk
-          fi
-          ls -lh release || true
-          ls -lh build_logs || true
-
-      - name: Upload build logs
-        if: always()
-        uses: actions/upload-artifact@v3
-        with:
-          name: build-logs-v1.32.11
-          path: build_logs
-          retention-days: 30
+          cp build/app/outputs/flutter-apk/app-release.apk release/ZTCDv${{ env.BUILD_NAME }}.apk
+          ls -lh release
 
       - name: Create GitHub Release (if tag)
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v1
         with:
-          files: release/ZTCDv1.32.11.apk
+          files: release/ZTCDv${{ env.BUILD_NAME }}.apk
           body: |
             # ZTCD v1.32.11 Release
 
@@ -112,9 +79,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Upload artifact (APK if present)
-        uses: actions/upload-artifact@v3
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
         with:
-          name: ZTCDv1.32.11-apk
-          path: release/ZTCDv1.32.11.apk
+          name: ZTCDv${{ env.BUILD_NAME }}-apk
+          path: release/ZTCDv${{ env.BUILD_NAME }}.apk
           retention-days: 30
