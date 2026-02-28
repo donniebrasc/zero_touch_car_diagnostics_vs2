@@ -115,7 +115,7 @@ class _CarStatusWidgetState extends State<CarStatusWidget>
                   Row(
                     children: [
                       Icon(
-                        widget.isConnected ? Icons.check_circle : Icons.error_circle,
+                        widget.isConnected ? Icons.check_circle : Icons.cancel,
                         color: widget.isConnected ? Colors.green : Colors.red,
                         size: 20,
                       ),

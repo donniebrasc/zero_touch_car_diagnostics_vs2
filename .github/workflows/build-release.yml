@@ -15,7 +15,7 @@ jobs:
         uses: actions/checkout@v4
         
       - name: Set up Java
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
@@ -29,92 +29,72 @@ jobs:
       - name: Get dependencies
         run: flutter pub get
 
-      - name: Show environment
-        run: |
-          echo "--- Environment ---"
-          env
-          echo "--- Java ---"
-          java -version || true
-          echo "--- Flutter ---"
-          flutter --version || true
-          echo "--- sdkmanager (if available) ---"
-          which sdkmanager || true
-
-      - name: Install Android SDK packages (if sdkmanager present)
-        shell: bash
-        run: |
-          set -e
-          if command -v sdkmanager >/dev/null 2>&1; then
-            echo "Installing Android SDK packages"
-            yes | sdkmanager "platform-tools" "platforms;android-33" "build-tools;33.0.0" "cmdline-tools;latest" || true
-            yes | sdkmanager --licenses || true
-          else
-            echo "sdkmanager not found; assuming runner already has Android SDK"
-          fi
-
       - name: Flutter doctor
         run: flutter doctor -v || true
 
-      - name: Build APK (verbose)
-        continue-on-error: true
+      - name: Build APK (debug, signed with debug key)
         run: |
-          set -o pipefail
-          mkdir -p build_logs
-          flutter build apk --release --build-name=1.32.11 --build-number=33 --verbose 2>&1 | tee build_logs/flutter_build.log
+          flutter build apk --debug --verbose
 
-      - name: Prepare release APK and logs
-        if: always()
+      - name: Determine version
+        id: version
+        run: |
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            VERSION="${{ github.ref_name }}"
+          else
+            VERSION="dev-$(echo '${{ github.sha }}' | cut -c1-7)"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "APK version: $VERSION"
+
+      - name: Prepare release APK
         run: |
           mkdir -p release
-          if [ -f build/app/outputs/flutter-apk/app-release.apk ]; then
-            cp build/app/outputs/flutter-apk/app-release.apk release/ZTCDv1.32.11.apk
+          APK_SRC="build/app/outputs/flutter-apk/app-debug.apk"
+          APK_DST="release/ZTCD-${{ steps.version.outputs.version }}.apk"
+          if [ -f "$APK_SRC" ]; then
+            cp "$APK_SRC" "$APK_DST"
+            echo "APK ready: $APK_DST"
+            ls -lh release/
+          else
+            echo "ERROR: APK not found at $APK_SRC"
+            ls -lh build/app/outputs/ || true
+            exit 1
           fi
-          ls -lh release || true
-          ls -lh build_logs || true
 
-      - name: Upload build logs
-        if: always()
-        uses: actions/upload-artifact@v3
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
         with:
-          name: build-logs-v1.32.11
-          path: build_logs
+          name: ZTCD-${{ steps.version.outputs.version }}-apk
+          path: release/ZTCD-${{ steps.version.outputs.version }}.apk
           retention-days: 30
 
-      - name: Create GitHub Release (if tag)
+      - name: Create GitHub Release (on tag)
         if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
-          files: release/ZTCDv1.32.11.apk
+          files: release/ZTCD-${{ steps.version.outputs.version }}.apk
+          generate_release_notes: true
           body: |
-            # ZTCD v1.32.11 Release
+            # Zero-Touch Car Diagnostics ${{ steps.version.outputs.version }}
 
             ## Features
-            - Dual LLM Support (Gemini 2.5 Pro + ChatGPT/OpenAI)
-            - OBD-II Telemetry (50+ PIDs)
+            - OBD-II Telemetry (50+ PIDs via Bluetooth/USB/Simulation)
             - Phone Sensor Fusion (Accelerometer, Gyroscope, GPS)
             - Real-time Damage Scoring
             - Trip Logging with Route Analysis
-            - AI-Powered Diagnostics
+            - AI-Powered Diagnostics (Google Gemini 2.5 Pro)
+            - Google Maps integration
 
             ## Installation
-            1. Download `ZTCDv1.32.11.apk`
-            2. Enable "Unknown sources" in Android settings
+            1. Download `ZTCD-${{ steps.version.outputs.version }}.apk`
+            2. Enable "Install from unknown sources" in Android settings
             3. Install the APK
-            4. Configure your AI API keys in Settings (Gemini or OpenAI)
+            4. (Optional) Configure your Gemini API key in Settings
 
-            ## What's New
-            - Added OpenAI ChatGPT support as alternative to Gemini
-            - Settings UI with provider selection
-            - Configurable model selection (GPT-4o, GPT-4, GPT-3.5-turbo)
-            - Support for both Gemini and OpenAI simultaneously
+            > **Note:** This is a debug-signed APK. See [RELEASE.md](RELEASE.md) for release-signing instructions.
 
             **Commit**: ${{ github.sha }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Upload artifact (APK if present)
-        uses: actions/upload-artifact@v3
-        with:
-          name: ZTCDv1.32.11-apk
-          path: release/ZTCDv1.32.11.apk
-          retention-days: 30
