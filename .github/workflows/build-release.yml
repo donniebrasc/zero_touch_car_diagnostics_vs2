@@ -6,6 +6,10 @@ on:
       - 'v*'
   workflow_dispatch:
 
+env:
+  BUILD_NAME: "1.32.11"
+  BUILD_NUMBER: "33"
+
 jobs:
   build:
     runs-on: ubuntu-latest

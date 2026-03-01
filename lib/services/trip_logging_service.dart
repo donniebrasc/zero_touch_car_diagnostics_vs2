@@ -123,7 +123,7 @@ class TripLog {
 
 class TripLoggingService {
   TripLog? _currentTrip;
-  StreamSubscription<AccelerometerEvent>? _accelSubscription;
+  StreamSubscription<UserAccelerometerEvent>? _accelSubscription;
   StreamSubscription<GyroscopeEvent>? _gyroSubscription;
   StreamSubscription<Position>? _positionSubscription;
 
