@@ -34,54 +34,71 @@ jobs:
         run: flutter pub get
 
       - name: Flutter doctor
-        # Run as informational step; failures do not block the build
         run: flutter doctor -v || true
 
-      - name: Build Release APK
+      - name: Build APK (debug, signed with debug key)
         run: |
-          flutter build apk --release --build-name=${{ env.BUILD_NAME }} --build-number=${{ env.BUILD_NUMBER }}
+          flutter build apk --debug --verbose
+
+      - name: Determine version
+        id: version
+        run: |
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            VERSION="${{ github.ref_name }}"
+          else
+            VERSION="dev-$(echo '${{ github.sha }}' | cut -c1-7)"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "APK version: $VERSION"
 
       - name: Prepare release APK
         run: |
           mkdir -p release
-          cp build/app/outputs/flutter-apk/app-release.apk release/ZTCDv${{ env.BUILD_NAME }}.apk
-          ls -lh release
+          APK_SRC="build/app/outputs/flutter-apk/app-debug.apk"
+          APK_DST="release/ZTCD-${{ steps.version.outputs.version }}.apk"
+          if [ -f "$APK_SRC" ]; then
+            cp "$APK_SRC" "$APK_DST"
+            echo "APK ready: $APK_DST"
+            ls -lh release/
+          else
+            echo "ERROR: APK not found at $APK_SRC"
+            ls -lh build/app/outputs/ || true
+            exit 1
+          fi
 
-      - name: Create GitHub Release (if tag)
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v1
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
         with:
-          files: release/ZTCDv${{ env.BUILD_NAME }}.apk
+          name: ZTCD-${{ steps.version.outputs.version }}-apk
+          path: release/ZTCD-${{ steps.version.outputs.version }}.apk
+          retention-days: 30
+
+      - name: Create GitHub Release (on tag)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/ZTCD-${{ steps.version.outputs.version }}.apk
+          generate_release_notes: true
           body: |
-            # ZTCD v1.32.11 Release
+            # Zero-Touch Car Diagnostics ${{ steps.version.outputs.version }}
 
             ## Features
-            - Dual LLM Support (Gemini 2.5 Pro + ChatGPT/OpenAI)
-            - OBD-II Telemetry (50+ PIDs)
+            - OBD-II Telemetry (50+ PIDs via Bluetooth/USB/Simulation)
             - Phone Sensor Fusion (Accelerometer, Gyroscope, GPS)
             - Real-time Damage Scoring
             - Trip Logging with Route Analysis
-            - AI-Powered Diagnostics
+            - AI-Powered Diagnostics (Google Gemini 2.5 Pro)
+            - Google Maps integration
 
             ## Installation
-            1. Download `ZTCDv1.32.11.apk`
-            2. Enable "Unknown sources" in Android settings
+            1. Download `ZTCD-${{ steps.version.outputs.version }}.apk`
+            2. Enable "Install from unknown sources" in Android settings
             3. Install the APK
-            4. Configure your AI API keys in Settings (Gemini or OpenAI)
+            4. (Optional) Configure your Gemini API key in Settings
 
-            ## What's New
-            - Added OpenAI ChatGPT support as alternative to Gemini
-            - Settings UI with provider selection
-            - Configurable model selection (GPT-4o, GPT-4, GPT-3.5-turbo)
-            - Support for both Gemini and OpenAI simultaneously
+            > **Note:** This is a debug-signed APK. See [RELEASE.md](RELEASE.md) for release-signing instructions.
 
             **Commit**: ${{ github.sha }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ZTCDv${{ env.BUILD_NAME }}-apk
-          path: release/ZTCDv${{ env.BUILD_NAME }}.apk
-          retention-days: 30
